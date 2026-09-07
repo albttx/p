@@ -18,9 +18,14 @@ import (
 // directory: "__P_CD__/abs/path".
 const SentinelCD = "__P_CD__"
 
-// DefaultBinary is the name the shim invokes. The shim itself takes the name
-// "p", so the binary must be installed under a different one.
-const DefaultBinary = "p-bin"
+// DefaultBinary is the name the shim invokes.
+//
+// It is the same name as the generated function, which is safe because every
+// shim calls "command <binary>": in POSIX sh, zsh, bash and fish alike,
+// "command" suppresses shell-function lookup and resolves the name on PATH.
+// Without that prefix the function would call itself and recurse forever,
+// which is why [Shim] is tested for it.
+const DefaultBinary = "p"
 
 // DefaultFunc is the name of the generated shell function.
 const DefaultFunc = "p"

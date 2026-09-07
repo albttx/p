@@ -1,8 +1,8 @@
 # p shell integration for fish. Add to config.fish, in this order:
-#   p-bin init fish | source          # 1. this cd wrapper
-#   p-bin completion fish | source    # 2. tab completion, needs the wrapper
+#   p init fish | source          # 1. this cd wrapper
+#   p completion fish | source    # 2. tab completion, needs the wrapper
 function p --description 'jump to a project'
-    set -l out (command p-bin $argv | string collect)
+    set -l out (command p $argv | string collect)
     set -l code $pipestatus[1]
     if test $code -ne 0
         return $code

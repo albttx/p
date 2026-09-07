@@ -25,11 +25,13 @@ func initCommand(a *app) *ucli.Command {
 		ArgsUsage: "<shell>",
 		Description: "Emits a shell function that runs the p binary and turns its cd sentinel into\n" +
 			"a real directory change, because a child process cannot cd its parent shell.\n" +
-			"Install the binary as `p-bin` on PATH and let this function take the name `p`:\n\n" +
-			"    eval \"$(p-bin init zsh)\"       # zsh, in ~/.zshrc\n" +
-			"    eval \"$(p-bin init bash)\"      # bash, in ~/.bashrc\n" +
-			"    p-bin init fish | source        # fish, in ~/.config/fish/config.fish\n\n" +
-			"For tab completion, which is a separate concern, see `p completion <shell>`.",
+			"The function takes the same name as the binary, which is safe because it\n" +
+			"calls `command p`, and `command` skips shell-function lookup:\n\n" +
+			"    eval \"$(p init zsh)\"        # zsh, in ~/.zshrc\n" +
+			"    eval \"$(p init bash)\"       # bash, in ~/.bashrc\n" +
+			"    p init fish | source        # fish, in ~/.config/fish/config.fish\n\n" +
+			"Add `p completion <shell>` after it for tab completion; that script binds\n" +
+			"to the name `p`, so this function has to be defined first.",
 		Flags: []ucli.Flag{
 			&ucli.StringFlag{
 				Name:  flagBin,

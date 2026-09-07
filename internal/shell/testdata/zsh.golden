@@ -1,9 +1,9 @@
 # p shell integration for zsh. Add to ~/.zshrc, in this order:
-#   eval "$(p-bin init zsh)"          # 1. this cd wrapper
-#   source <(p-bin completion zsh)    # 2. tab completion, needs the wrapper
+#   eval "$(p init zsh)"          # 1. this cd wrapper
+#   source <(p completion zsh)    # 2. tab completion, needs the wrapper
 p() {
   local out
-  out="$(command p-bin "$@")" || return $?
+  out="$(command p "$@")" || return $?
   case "$out" in
     __P_CD__*) builtin cd -- "${out#__P_CD__}" ;;
     *) [ -n "$out" ] && print -r -- "$out" ;;

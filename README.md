@@ -23,17 +23,15 @@ remember.
 
 ```sh
 go install github.com/albttx/p/cmd/p@latest
-mv "$(go env GOPATH)/bin/p" "$(go env GOPATH)/bin/p-bin"
 ```
 
-The binary is installed as `p-bin`. Add these two lines to your shell config,
-**in this order** — the completion script binds to the name `p`, so the
-function that defines it has to run first:
+Add these two lines to your shell config, **in this order** — the completion
+script binds to the name `p`, so the function that defines it has to run first:
 
 ```sh
 # ~/.zshrc
-eval "$(p-bin init zsh)"          # defines the `p` shell function
-source <(p-bin completion zsh)    # tab completion
+eval "$(p init zsh)"          # defines the `p` shell function
+source <(p completion zsh)    # tab completion
 ```
 
 `p init` prints a shell function that turns `p`'s output into a real `cd`,
@@ -44,12 +42,12 @@ since a child process can't change its parent shell's directory.
 
 ```sh
 # ~/.bashrc
-eval "$(p-bin init bash)"
-source <(p-bin completion bash)
+eval "$(p init bash)"
+source <(p completion bash)
 
 # ~/.config/fish/config.fish
-p-bin init fish | source
-p-bin completion fish | source
+p init fish | source
+p completion fish | source
 ```
 </details>
 
