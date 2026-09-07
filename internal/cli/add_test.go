@@ -168,15 +168,36 @@ func TestAdd(t *testing.T) {
 func TestAddDottedSessionName(t *testing.T) {
 	t.Parallel()
 
+	// session is the logical owner/repo name; stored is what tmux actually
+	// holds for it, since tmux rewrites '.' and ':' to '_'. The checkout
+	// directory keeps its dots -- it is a real filesystem path.
 	tests := []struct {
 		name    string
 		spec    string
 		session string
+		stored  string
 		dest    string
 	}{
-		{name: "kontacts.dev", spec: "github.com/albttx/kontacts.dev", session: "albttx/kontacts.dev", dest: "github.com/albttx/kontacts.dev"},
-		{name: "bare owner/domain", spec: "albttx/0human.company", session: "albttx/0human.company", dest: "github.com/albttx/0human.company"},
-		{name: "ssh url", spec: "git@github.com:albttx/l7x.org.git", session: "albttx/l7x.org", dest: "github.com/albttx/l7x.org"},
+		{
+			name: "kontacts.dev", spec: "github.com/albttx/kontacts.dev",
+			session: "albttx/kontacts.dev", stored: "albttx/kontacts_dev",
+			dest: "github.com/albttx/kontacts.dev",
+		},
+		{
+			name: "bare owner/domain", spec: "albttx/0human.company",
+			session: "albttx/0human.company", stored: "albttx/0human_company",
+			dest: "github.com/albttx/0human.company",
+		},
+		{
+			name: "ssh url", spec: "git@github.com:albttx/l7x.org.git",
+			session: "albttx/l7x.org", stored: "albttx/l7x_org",
+			dest: "github.com/albttx/l7x.org",
+		},
+		{
+			name: "multiple dots", spec: "gnolang/docs.gno.land",
+			session: "gnolang/docs.gno.land", stored: "gnolang/docs_gno_land",
+			dest: "github.com/gnolang/docs.gno.land",
+		},
 	}
 
 	for _, tt := range tests {
@@ -193,9 +214,9 @@ func TestAddDottedSessionName(t *testing.T) {
 				"git clone " + cloneURLFor(tt.session) + " " + dest,
 			})
 			assertArgv(t, "tmux", h.tmux.argvs(), []string{
-				"tmux has-session -t=" + tt.session,
-				"tmux new-session -d -s " + tt.session + " -c " + dest,
-				"tmux attach -t=" + tt.session,
+				"tmux has-session -t=" + tt.stored,
+				"tmux new-session -d -s " + tt.stored + " -c " + dest,
+				"tmux attach -t=" + tt.stored,
 			})
 		})
 	}
@@ -299,5 +320,65 @@ func assertArgv(t *testing.T, what string, got, want []string) {
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("%s argv =\n  %s\nwant\n  %s",
 			what, strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
+// TestAddAdoptsExistingDottedSession is the end-to-end payoff of the session
+// name fix.
+//
+// The user's pre-existing sessions were created from dotted names by an older
+// script, so tmux stored them rewritten ("albttx/kontacts_dev"). Before the
+// fix, `p add` probed for the dotted name, was told no such session, and then
+// failed to create one because tmux considered it a duplicate. Now it must
+// find the session and go straight there.
+func TestAddAdoptsExistingDottedSession(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		tmuxEnv  string
+		wantLast string
+	}{
+		{
+			name:     "outside tmux attaches to the stored session",
+			wantLast: "tmux attach -t=albttx/kontacts_dev",
+		},
+		{
+			name:     "inside tmux switches to the stored session",
+			tmuxEnv:  "/private/tmp/tmux-501/default,999,0",
+			wantLast: "tmux switch-client -t=albttx/kontacts_dev",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			h := newHarness(t, "github.com/albttx/kontacts.dev")
+			// What tmux actually holds, rewritten by session_check_name().
+			h.tmux.existing["albttx/kontacts_dev"] = true
+			if tt.tmuxEnv != "" {
+				h.env["TMUX"] = tt.tmuxEnv
+			}
+
+			if err := h.run("add", "github.com/albttx/kontacts.dev"); err != nil {
+				t.Fatalf("p add: %v", err)
+			}
+
+			assertArgv(t, "tmux", h.tmux.argvs(), []string{
+				"tmux has-session -t=albttx/kontacts_dev",
+				tt.wantLast,
+			})
+			// Already on disk and already running: nothing to clone, nothing
+			// to create.
+			if len(h.git.calls) != 0 {
+				t.Errorf("cloned an existing checkout: %v", h.git.argvs())
+			}
+			for _, argv := range h.tmux.argvs() {
+				if strings.Contains(argv, "new-session") {
+					t.Errorf("recreated a session tmux already holds: %s", argv)
+				}
+			}
+		})
 	}
 }

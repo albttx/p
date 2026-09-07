@@ -16,10 +16,13 @@
 //	return client.Focus(ctx, "albttx/p", os.Getenv("TMUX") != "")
 //
 // Session names here are "owner/repo", which routinely contain dots —
-// albttx/kontacts.dev, albttx/l7x.org. Both '.' and ':' are meaningful in tmux
-// target specs, so every target this package builds uses the "-t=<name>" form,
-// whose '=' prefix forces an exact match instead of an fnmatch pattern. See
-// [Target]. Nothing is ever interpolated into a shell string.
+// albttx/kontacts.dev, albttx/l7x.org — and both '.' and ':' are special to
+// tmux. They separate the parts of a target spec, "session:window.pane", and
+// tmux silently rewrites them to '_' when it creates a session. Handling that
+// takes two independent things, and every name this package sends to tmux gets
+// both: [SessionName] rewrites the name the way tmux will, and [Target] wraps
+// it in the "-t=" form whose '=' prefix forces an exact match rather than an
+// fnmatch pattern. Nothing is ever interpolated into a shell string.
 //
 // This package deliberately defines its own [Runner] and [ExecRunner] rather
 // than sharing them with a sibling package. The duplication is a few lines and
@@ -169,18 +172,53 @@ func (c Client) bin() string {
 	return c.Bin
 }
 
-// Target formats a session name as an exact-match tmux target, "-t=<session>".
+// SessionName converts a logical session name into the name tmux will actually
+// store, by replacing every '.' and ':' with '_'.
 //
-// The '=' prefix is load-bearing: without it tmux treats the name as an
-// fnmatch pattern and splits it on '.' and ':', so a session called
-// "albttx/l7x.org" would be read as window "org" of session "albttx/l7x".
+// tmux does this itself, in session_check_name(), because '.' and ':' are
+// target-spec separators: a target is parsed as "session:window.pane" before
+// any name is matched. A caller that ignores the rewrite gets a session it can
+// never address again. Asking for "albttx/kontacts.dev" creates
+// "albttx/kontacts_dev", and then:
+//
+//	tmux has-session -t=albttx/kontacts.dev   # can't find pane: dev
+//	tmux has-session -t=albttx/kontacts_dev   # found
+//
+// so the first call reports "no such session" forever and every attempt to
+// create it fails as a duplicate.
+//
+// Verified against tmux 3.6a: '.' and ':' are the only characters rewritten.
+// Spaces, '/', '$', '*', '%', '[', ']' and tabs are all stored verbatim. A
+// leading or trailing '.' is rewritten like any other. tmux rejects an empty
+// name outright ("invalid session: "), and SessionName passes it through
+// unchanged so that error surfaces from tmux rather than being masked here.
+//
+// Apply this to any name you hand to tmux. [Client] already does, and [Target]
+// applies it too, so a name only needs sanitising once.
+func SessionName(session string) string {
+	return sessionNameReplacer.Replace(session)
+}
+
+// sessionNameReplacer mirrors tmux's session_check_name().
+var sessionNameReplacer = strings.NewReplacer(".", "_", ":", "_")
+
+// Target formats a session name as an exact-match tmux target,
+// "-t=<sanitised name>", applying [SessionName] first.
+//
+// Both halves are load-bearing and neither is sufficient alone. [SessionName]
+// is what makes the target refer to a session that can exist at all, since
+// tmux would otherwise parse the '.' as a pane separator. The '=' prefix then
+// stops tmux treating the remaining name as an fnmatch pattern, so
+// "albttx/gno" cannot silently match "albttx/gnochess".
+//
 // [Client] applies this to every target it builds; Target is exported for
 // callers assembling tmux commands this package does not cover.
-func Target(session string) string { return "-t=" + session }
+func Target(session string) string { return "-t=" + SessionName(session) }
 
-// HasSession reports whether a session with this exact name exists. A failure
-// to reach tmux at all is indistinguishable from a missing session and is
-// reported as false.
+// HasSession reports whether a session exists, matching on the [SessionName]
+// form of the given name so that it finds sessions tmux stored under a
+// rewritten name. A failure to reach tmux at all is indistinguishable from a
+// missing session and is reported as false.
 func (c Client) HasSession(ctx context.Context, session string) bool {
 	return c.Runner.Run(ctx, c.bin(), "has-session", Target(session)) == nil
 }
@@ -189,10 +227,20 @@ func (c Client) HasSession(ctx context.Context, session string) bool {
 // directory of its first window. It fails if the session already exists; use
 // [Client.EnsureSession] to make that case a no-op.
 func (c Client) NewSession(ctx context.Context, session, dir string) error {
-	if err := c.Runner.Run(ctx, c.bin(), "new-session", "-d", "-s", session, "-c", dir); err != nil {
-		return fmt.Errorf("create tmux session %q: %w", session, err)
+	name := SessionName(session)
+	if err := c.Runner.Run(ctx, c.bin(), "new-session", "-d", "-s", name, "-c", dir); err != nil {
+		return fmt.Errorf("create tmux session %s: %w", describe(session), err)
 	}
 	return nil
+}
+
+// describe names a session for an error message, showing the name tmux
+// actually uses when it differs from the one the caller asked for.
+func describe(session string) string {
+	if name := SessionName(session); name != session {
+		return fmt.Sprintf("%q (tmux stores it as %q)", session, name)
+	}
+	return fmt.Sprintf("%q", session)
 }
 
 // EnsureSession creates the session unless it already exists, and reports
@@ -220,7 +268,7 @@ func (c Client) Attach(ctx context.Context) error {
 // outside tmux; see [Client.Focus].
 func (c Client) AttachSession(ctx context.Context, session string) error {
 	if err := c.Runner.Run(ctx, c.bin(), "attach", Target(session)); err != nil {
-		return fmt.Errorf("tmux attach %q: %w", session, err)
+		return fmt.Errorf("tmux attach %s: %w", describe(session), err)
 	}
 	return nil
 }
@@ -229,7 +277,7 @@ func (c Client) AttachSession(ctx context.Context, session string) error {
 // inside tmux; see [Client.Focus].
 func (c Client) SwitchClient(ctx context.Context, session string) error {
 	if err := c.Runner.Run(ctx, c.bin(), "switch-client", Target(session)); err != nil {
-		return fmt.Errorf("tmux switch-client %q: %w", session, err)
+		return fmt.Errorf("tmux switch-client %s: %w", describe(session), err)
 	}
 	return nil
 }

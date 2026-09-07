@@ -604,8 +604,8 @@ func TestTmuxArgv(t *testing.T) {
 		}
 
 		want := []string{
-			"tmux has-session -t=albttx/kontacts.dev",
-			"tmux new-session -d -s albttx/kontacts.dev -c " + filepath.Join(h.root, "github.com/albttx/kontacts.dev"),
+			"tmux has-session -t=albttx/kontacts_dev",
+			"tmux new-session -d -s albttx/kontacts_dev -c " + filepath.Join(h.root, "github.com/albttx/kontacts.dev"),
 			"tmux has-session -t=albttx/p",
 			"tmux new-session -d -s albttx/p -c " + filepath.Join(h.root, "github.com/albttx/p"),
 			"tmux attach",
@@ -674,8 +674,8 @@ func TestTmuxArgv(t *testing.T) {
 		}
 
 		want := []string{
-			"tmux has-session -t=albttx/kontacts.dev",
-			"tmux new-session -d -s albttx/kontacts.dev -c " + filepath.Join(h.root, "github.com/albttx/kontacts.dev"),
+			"tmux has-session -t=albttx/kontacts_dev",
+			"tmux new-session -d -s albttx/kontacts_dev -c " + filepath.Join(h.root, "github.com/albttx/kontacts.dev"),
 			"tmux has-session -t=albttx/p",
 			"tmux new-session -d -s albttx/p -c " + filepath.Join(h.root, "github.com/albttx/p"),
 			"tmux attach",
