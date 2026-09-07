@@ -1,0 +1,12 @@
+# p shell integration for bash. Add to ~/.bashrc, in this order:
+#   eval "$(p-bin init bash)"          # 1. this cd wrapper
+#   source <(p-bin completion bash)    # 2. tab completion, needs the wrapper
+p() {
+  local out
+  out="$(command p-bin "$@")" || return $?
+  case "$out" in
+    __P_CD__*) builtin cd -- "${out#__P_CD__}" ;;
+    *) [ -n "$out" ] && printf '%s\n' "$out" ;;
+  esac
+  return 0
+}

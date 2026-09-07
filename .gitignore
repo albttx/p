@@ -1,0 +1,24 @@
+# Binaries
+/p
+/p-bin
+/dist/
+*.exe
+*.test
+*.out
+
+# Go workspace / build cache
+go.work
+go.work.sum
+
+# Coverage
+coverage.txt
+coverage.html
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local agent memory (machine-local, not project state)
+.claude/agent-memory/
