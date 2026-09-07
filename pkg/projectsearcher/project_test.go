@@ -1,4 +1,4 @@
-package project
+package projectsearcher
 
 import (
 	"os"
@@ -173,8 +173,8 @@ func TestScanNeverDescendsIntoProjects(t *testing.T) {
 		if rel == "." {
 			continue
 		}
-		if depth := len(strings.Split(filepath.ToSlash(rel), "/")); depth > Depth {
-			t.Errorf("walk visited %s at depth %d, want at most %d", rel, depth, Depth)
+		if depth := len(strings.Split(filepath.ToSlash(rel), "/")); depth > projectDepth {
+			t.Errorf("walk visited %s at depth %d, want at most %d", rel, depth, projectDepth)
 		}
 	}
 

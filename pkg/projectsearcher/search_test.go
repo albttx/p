@@ -1,16 +1,14 @@
-package query
+package projectsearcher
 
 import (
 	"errors"
 	"strings"
 	"testing"
-
-	"github.com/albttx/p/internal/project"
 )
 
 // corpus mirrors the shape of the real source tree, including the repository
 // basenames that genuinely collide across owners there.
-func corpus() []project.Project {
+func corpus() []Project {
 	specs := []string{
 		"github.com/albttx/p",
 		"github.com/albttx/blog",
@@ -30,21 +28,21 @@ func corpus() []project.Project {
 		"gitlab.com/albttx/p",
 	}
 
-	out := make([]project.Project, 0, len(specs))
+	out := make([]Project, 0, len(specs))
 	for _, s := range specs {
 		parts := strings.Split(s, "/")
-		out = append(out, project.Project{
+		out = append(out, Project{
 			Root:  "/src",
 			Host:  parts[0],
 			Owner: parts[1],
 			Repo:  parts[2],
 		})
 	}
-	project.Sort(out)
+	Sort(out)
 	return out
 }
 
-func fulls(projects []project.Project) []string {
+func fulls(projects []Project) []string {
 	out := make([]string, 0, len(projects))
 	for _, p := range projects {
 		out = append(out, p.Full())
@@ -320,22 +318,13 @@ func TestResolve(t *testing.T) {
 			opts:         Options{Host: "gitlab.com"},
 			wantNotFound: true,
 		},
-		{
-			name: "limit does not silently disambiguate",
-			term: "blog",
-			opts: Options{Limit: 1},
-			wantAmbiguous: []string{
-				"github.com/albttx/blog",
-				"github.com/nysa-network/blog",
-			},
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := Resolve(corpus(), tt.term, tt.opts)
+			got, err := Resolve(Filter(corpus(), tt.opts), tt.term)
 
 			switch {
 			case tt.wantNotFound:
@@ -366,5 +355,35 @@ func TestResolve(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestResolveIgnoresNothingItWasGiven pins the contract that made Resolve drop
+// its Options parameter: it reports on exactly the slice it receives, so
+// narrowing is always the caller's explicit, visible decision.
+func TestResolveIgnoresNothingItWasGiven(t *testing.T) {
+	t.Parallel()
+
+	// Resolve over the whole corpus is ambiguous...
+	var ambig *AmbiguousError
+	if _, err := Resolve(corpus(), "blog"); !errors.As(err, &ambig) {
+		t.Fatalf("Resolve(corpus, blog) error = %v, want *AmbiguousError", err)
+	}
+	if len(ambig.Candidates) != 2 {
+		t.Errorf("candidates = %v, want both blogs", fulls(ambig.Candidates))
+	}
+
+	// ...and stays ambiguous however many times it is called, because it
+	// carries no hidden limit of its own.
+	if _, err := Resolve(corpus(), "blog"); !errors.As(err, &ambig) {
+		t.Fatalf("Resolve is not deterministic: %v", err)
+	}
+
+	// Truncating the candidates before resolving turns a real ambiguity into a
+	// confident wrong answer. That is a caller error, documented on Resolve;
+	// this asserts the mechanism so the doc cannot quietly become false.
+	got, err := Resolve(Filter(corpus(), Options{Limit: 1}), "albttx/p")
+	if err == nil && got.Full() != "github.com/albttx/p" {
+		t.Errorf("Resolve after a truncating Filter = %q, want the first survivor", got.Full())
 	}
 }

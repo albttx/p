@@ -10,10 +10,9 @@ import (
 	ucli "github.com/urfave/cli/v3"
 
 	"github.com/albttx/p/internal/config"
-	"github.com/albttx/p/internal/project"
-	"github.com/albttx/p/internal/query"
-	"github.com/albttx/p/internal/tmux"
-	"github.com/albttx/p/internal/vcs"
+	"github.com/albttx/p/pkg/projectsearcher"
+	"github.com/albttx/p/pkg/tmux"
+	"github.com/albttx/p/pkg/vcs"
 )
 
 const (
@@ -179,12 +178,12 @@ func codeDir(cmd *ucli.Command) (string, error) {
 }
 
 // projects scans the configured source tree.
-func projects(cmd *ucli.Command) ([]project.Project, error) {
+func projects(cmd *ucli.Command) ([]projectsearcher.Project, error) {
 	dir, err := codeDir(cmd)
 	if err != nil {
 		return nil, err
 	}
-	return project.Scan(dir)
+	return projectsearcher.Scan(dir)
 }
 
 // selectorFlags are the filters shared by the commands that operate on sets of
@@ -202,8 +201,8 @@ func selectorFlags() []ucli.Flag {
 }
 
 // selectorOptions reads the shared filters off cmd.
-func selectorOptions(cmd *ucli.Command) query.Options {
-	return query.Options{
+func selectorOptions(cmd *ucli.Command) projectsearcher.Options {
+	return projectsearcher.Options{
 		Host:    cmd.String(flagHost),
 		Owner:   cmd.String(flagOwner),
 		Exclude: cmd.StringSlice(flagExclude),

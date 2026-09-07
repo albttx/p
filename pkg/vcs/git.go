@@ -9,20 +9,30 @@ import (
 	"path/filepath"
 )
 
-// Runner executes an external command. It is the seam that keeps tests from
-// shelling out to a real git.
+// Runner executes an external command.
+//
+// It is the seam that keeps callers and tests from shelling out to a real git.
+// Implementations receive the binary name and its arguments already split, and
+// must never pass them through a shell.
 type Runner interface {
+	// Run executes the command and reports whether it succeeded.
 	Run(ctx context.Context, name string, args ...string) error
+	// Output executes the command and returns what it wrote to stdout.
 	Output(ctx context.Context, name string, args ...string) ([]byte, error)
 }
 
-// ExecRunner runs commands with os/exec.
+// ExecRunner runs commands with os/exec. The zero value is usable.
 //
-// Stdout deliberately defaults to stderr rather than stdout: p's stdout
-// carries the cd sentinel that the shell shim consumes, so no subprocess may
-// be allowed to write to it.
+// Stdout deliberately defaults to os.Stderr rather than os.Stdout. Git writes
+// its progress to stderr anyway, and a program whose own stdout is a data
+// channel — a path, a JSON document, a shell sentinel — must not let a
+// subprocess write into it. Set Stdout explicitly if you want the usual
+// behaviour.
 type ExecRunner struct {
+	// Stdout receives the child's standard output. It defaults to os.Stderr
+	// rather than os.Stdout; see the note on ExecRunner above.
 	Stdout io.Writer
+	// Stderr receives the child's standard error. Defaults to os.Stderr.
 	Stderr io.Writer
 }
 
@@ -56,11 +66,13 @@ func orStderr(w io.Writer) io.Writer {
 	return w
 }
 
-// Git clones repositories through a [Runner].
+// Git clones repositories through a [Runner]. The zero value is not usable;
+// Runner is required.
 type Git struct {
 	// Runner executes git. Required.
 	Runner Runner
-	// Bin is the git executable, "git" when empty.
+	// Bin is the git executable to invoke. Defaults to "git", resolved on
+	// PATH; set it to an absolute path to pin a particular install.
 	Bin string
 }
 
@@ -71,8 +83,12 @@ func (g Git) bin() string {
 	return g.Bin
 }
 
-// Clone clones url into dest, creating dest's parent directories first.
-// It refuses to clone over an existing path.
+// Clone runs "git clone url dest", creating dest's parent directories first so
+// that a fresh {host}/{owner} prefix does not have to exist beforehand.
+//
+// It refuses to clone onto an existing path rather than letting git fail
+// halfway, and it does not clean up a partial checkout if git fails: the
+// directory is left in place for inspection.
 func (g Git) Clone(ctx context.Context, url, dest string) error {
 	if g.Runner == nil {
 		return fmt.Errorf("clone %s: no runner configured", url)

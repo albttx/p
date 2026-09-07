@@ -6,9 +6,8 @@ import (
 
 	ucli "github.com/urfave/cli/v3"
 
-	"github.com/albttx/p/internal/project"
-	"github.com/albttx/p/internal/query"
 	"github.com/albttx/p/internal/shell"
+	"github.com/albttx/p/pkg/projectsearcher"
 )
 
 // navigate is the root action: it runs for any first argument that is not a
@@ -38,10 +37,13 @@ func (a *app) navigate(ctx context.Context, cmd *ucli.Command) error {
 }
 
 // resolve scans the tree and narrows it to the single project term names.
-func (a *app) resolve(cmd *ucli.Command, term string) (project.Project, error) {
+func (a *app) resolve(cmd *ucli.Command, term string) (projectsearcher.Project, error) {
 	all, err := projects(cmd)
 	if err != nil {
-		return project.Project{}, err
+		return projectsearcher.Project{}, err
 	}
-	return query.Resolve(all, term, selectorOptions(cmd))
+	// Resolve takes no options of its own, so the narrowing flags are applied
+	// first. selectorOptions never carries a Limit -- only `p query` has that
+	// flag -- so this cannot truncate candidates and hide an ambiguity.
+	return projectsearcher.Resolve(projectsearcher.Filter(all, selectorOptions(cmd)), term)
 }

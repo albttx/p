@@ -6,8 +6,8 @@ import (
 
 	ucli "github.com/urfave/cli/v3"
 
-	"github.com/albttx/p/internal/query"
-	"github.com/albttx/p/internal/tmux"
+	"github.com/albttx/p/pkg/projectsearcher"
+	"github.com/albttx/p/pkg/tmux"
 )
 
 const (
@@ -41,9 +41,9 @@ func tmuxCommand(a *app) *ucli.Command {
 			}
 
 			opts := selectorOptions(cmd)
-			matches := query.Search(all, cmd.String(flagFilter), opts)
+			matches := projectsearcher.Search(all, cmd.String(flagFilter), opts)
 			if len(matches) == 0 {
-				return fmt.Errorf("tmux: %w", query.ErrNotFound)
+				return fmt.Errorf("tmux: %w", projectsearcher.ErrNotFound)
 			}
 
 			runner, release := a.tmuxRunner(cmd.Bool(flagDryRun))

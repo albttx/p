@@ -7,8 +7,7 @@ import (
 
 	ucli "github.com/urfave/cli/v3"
 
-	"github.com/albttx/p/internal/project"
-	"github.com/albttx/p/internal/query"
+	"github.com/albttx/p/pkg/projectsearcher"
 )
 
 const (
@@ -33,7 +32,7 @@ func listCommand(a *app) *ucli.Command {
 			if err != nil {
 				return err
 			}
-			matches := query.Filter(all, selectorOptions(cmd))
+			matches := projectsearcher.Filter(all, selectorOptions(cmd))
 			return a.printProjects(matches, cmd.Bool(flagJSON), cmd.Bool(flagPath))
 		},
 	}
@@ -50,7 +49,7 @@ type jsonProject struct {
 }
 
 // printProjects renders a result set in the requested form.
-func (a *app) printProjects(projects []project.Project, asJSON, asPath bool) error {
+func (a *app) printProjects(projects []projectsearcher.Project, asJSON, asPath bool) error {
 	if asJSON {
 		out := make([]jsonProject, 0, len(projects))
 		for _, p := range projects {

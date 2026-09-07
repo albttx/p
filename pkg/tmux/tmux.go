@@ -1,11 +1,30 @@
-// Package tmux wraps the tmux commands p needs.
+// Package tmux drives the handful of tmux commands needed to keep one session
+// per project.
 //
-// Every tmux invocation goes through a [Runner] as an explicit argv slice.
-// Session names routinely contain dots — albttx/kontacts.dev,
-// albttx/0human.company, albttx/l7x.org — and "." and ":" are meaningful in
-// tmux target specs, so nothing here builds a shell string and every target is
-// passed as "-t=<name>", whose "=" prefix forces an exact match instead of
-// fnmatch.
+// Every invocation goes through a [Runner] as an explicit argv slice, which is
+// what makes the package testable: substitute a fake Runner and assert the
+// exact command line, with no tmux server anywhere near the test. [DryRunner]
+// is a ready-made one that prints instead of executing.
+//
+//	client := tmux.Client{Runner: tmux.ExecRunner{}}
+//
+//	created, err := client.EnsureSession(ctx, "albttx/p", "/src/github.com/albttx/p")
+//	if err != nil {
+//		return err
+//	}
+//	_ = created
+//	return client.Focus(ctx, "albttx/p", os.Getenv("TMUX") != "")
+//
+// Session names here are "owner/repo", which routinely contain dots —
+// albttx/kontacts.dev, albttx/l7x.org. Both '.' and ':' are meaningful in tmux
+// target specs, so every target this package builds uses the "-t=<name>" form,
+// whose '=' prefix forces an exact match instead of an fnmatch pattern. See
+// [Target]. Nothing is ever interpolated into a shell string.
+//
+// This package deliberately defines its own [Runner] and [ExecRunner] rather
+// than sharing them with a sibling package. The duplication is a few lines and
+// buys two public packages that do not depend on each other, which is the
+// better trade for a caller who wants only one of them.
 package tmux
 
 import (
@@ -17,10 +36,16 @@ import (
 	"strings"
 )
 
-// Runner executes an external command. It is the seam that keeps tests from
-// talking to a real tmux server.
+// Runner executes an external command.
+//
+// It is the seam that keeps callers and tests away from a real tmux server.
+// Implementations receive the binary name and its arguments already split, and
+// must never pass them through a shell.
 type Runner interface {
+	// Run executes the command and reports whether it succeeded. A non-nil
+	// error means a non-zero exit or a failure to start.
 	Run(ctx context.Context, name string, args ...string) error
+	// Output executes the command and returns what it wrote to stdout.
 	Output(ctx context.Context, name string, args ...string) ([]byte, error)
 }
 
@@ -31,8 +56,13 @@ type Runner interface {
 // inherited it would find a pipe where it expects a terminal. Use
 // [TerminalRunner], which binds the controlling terminal directly.
 type ExecRunner struct {
-	Stdin  io.Reader
+	// Stdin is the child's standard input. Defaults to the process's own.
+	Stdin io.Reader
+	// Stdout is the child's standard output. Defaults to os.Stderr, not
+	// os.Stdout, so that a program using its own stdout as a data channel
+	// cannot have it polluted by a subprocess.
 	Stdout io.Writer
+	// Stderr is the child's standard error. Defaults to os.Stderr.
 	Stderr io.Writer
 
 	// closers releases any file opened by TerminalRunner.
@@ -53,14 +83,15 @@ func TerminalRunner() (ExecRunner, func()) {
 	return r, r.Close
 }
 
-// Close releases any terminal opened by [TerminalRunner].
+// Close releases any terminal opened by [TerminalRunner]. It is safe to call
+// on an ExecRunner built any other way, where it does nothing.
 func (r ExecRunner) Close() {
 	for _, c := range r.closers {
 		_ = c.Close()
 	}
 }
 
-// Run executes the command.
+// Run executes the command, wiring the child to the configured streams.
 func (r ExecRunner) Run(ctx context.Context, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin = orStdin(r.Stdin)
@@ -102,27 +133,32 @@ type DryRunner struct {
 	W io.Writer
 }
 
-// Run prints the argv.
+var _ Runner = DryRunner{}
+
+// Run prints the argv and reports success, except for "has-session" probes,
+// which report failure so a dry run shows the sessions it would create.
 func (d DryRunner) Run(_ context.Context, name string, args ...string) error {
-	fmt.Fprintln(d.W, QuoteArgv(append([]string{name}, args...)))
+	fmt.Fprintln(d.W, quoteArgv(append([]string{name}, args...)))
 	if len(args) > 0 && args[0] == "has-session" {
 		return errNoSession
 	}
 	return nil
 }
 
-// Output prints the argv and returns no output.
+// Output prints the argv and returns no data.
 func (d DryRunner) Output(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return nil, d.Run(ctx, name, args...)
 }
 
 var errNoSession = fmt.Errorf("tmux: session not found")
 
-// Client issues tmux commands.
+// Client issues tmux commands through a [Runner]. The zero value is not
+// usable; Runner is required.
 type Client struct {
 	// Runner executes tmux. Required.
 	Runner Runner
-	// Bin is the tmux executable, "tmux" when empty.
+	// Bin is the tmux executable to invoke. Defaults to "tmux", resolved on
+	// PATH; set it to an absolute path to pin a particular install.
 	Bin string
 }
 
@@ -133,18 +169,25 @@ func (c Client) bin() string {
 	return c.Bin
 }
 
-// Target formats a session name as an exact-match tmux target. The "="
-// prefix stops tmux from treating dots, colons and wildcards in the name as
-// target syntax.
+// Target formats a session name as an exact-match tmux target, "-t=<session>".
+//
+// The '=' prefix is load-bearing: without it tmux treats the name as an
+// fnmatch pattern and splits it on '.' and ':', so a session called
+// "albttx/l7x.org" would be read as window "org" of session "albttx/l7x".
+// [Client] applies this to every target it builds; Target is exported for
+// callers assembling tmux commands this package does not cover.
 func Target(session string) string { return "-t=" + session }
 
-// HasSession reports whether a session with this exact name exists.
+// HasSession reports whether a session with this exact name exists. A failure
+// to reach tmux at all is indistinguishable from a missing session and is
+// reported as false.
 func (c Client) HasSession(ctx context.Context, session string) bool {
 	return c.Runner.Run(ctx, c.bin(), "has-session", Target(session)) == nil
 }
 
-// NewSession creates a detached session named session with dir as its working
-// directory.
+// NewSession creates a detached session named session, with dir as the working
+// directory of its first window. It fails if the session already exists; use
+// [Client.EnsureSession] to make that case a no-op.
 func (c Client) NewSession(ctx context.Context, session, dir string) error {
 	if err := c.Runner.Run(ctx, c.bin(), "new-session", "-d", "-s", session, "-c", dir); err != nil {
 		return fmt.Errorf("create tmux session %q: %w", session, err)
@@ -152,8 +195,9 @@ func (c Client) NewSession(ctx context.Context, session, dir string) error {
 	return nil
 }
 
-// EnsureSession creates the session if it does not already exist. It reports
-// whether a session was created.
+// EnsureSession creates the session unless it already exists, and reports
+// whether it created one. It is idempotent, so it is safe to call on every
+// project on every run.
 func (c Client) EnsureSession(ctx context.Context, session, dir string) (bool, error) {
 	if c.HasSession(ctx, session) {
 		return false, nil
@@ -205,8 +249,8 @@ func (c Client) Focus(ctx context.Context, session string, inTmux bool) error {
 	return c.AttachSession(ctx, session)
 }
 
-// QuoteArgv renders an argv as a single shell-safe line, for printing.
-func QuoteArgv(argv []string) string {
+// quoteArgv renders an argv as a single shell-safe line, for display only.
+func quoteArgv(argv []string) string {
 	parts := make([]string, len(argv))
 	for i, a := range argv {
 		parts[i] = quote(a)

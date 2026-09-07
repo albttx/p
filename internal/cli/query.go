@@ -6,7 +6,7 @@ import (
 
 	ucli "github.com/urfave/cli/v3"
 
-	"github.com/albttx/p/internal/query"
+	"github.com/albttx/p/pkg/projectsearcher"
 )
 
 // queryCommand lists the projects a term matches, using the same tiered
@@ -47,9 +47,9 @@ func queryCommand(a *app) *ucli.Command {
 			opts := selectorOptions(cmd)
 			opts.Limit = cmd.Int(flagLimit)
 
-			matches := query.Search(all, term, opts)
+			matches := projectsearcher.Search(all, term, opts)
 			if len(matches) == 0 {
-				return fmt.Errorf("%w for %q", query.ErrNotFound, term)
+				return fmt.Errorf("%w for %q", projectsearcher.ErrNotFound, term)
 			}
 			return a.printProjects(matches, cmd.Bool(flagJSON), cmd.Bool(flagPath))
 		},

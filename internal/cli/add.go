@@ -9,8 +9,8 @@ import (
 
 	ucli "github.com/urfave/cli/v3"
 
-	"github.com/albttx/p/internal/tmux"
-	"github.com/albttx/p/internal/vcs"
+	"github.com/albttx/p/pkg/tmux"
+	"github.com/albttx/p/pkg/vcs"
 )
 
 // addCommand is "start working on this project", whether or not it is already

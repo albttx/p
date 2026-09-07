@@ -6,7 +6,7 @@ import (
 
 	ucli "github.com/urfave/cli/v3"
 
-	"github.com/albttx/p/internal/vcs"
+	"github.com/albttx/p/pkg/vcs"
 )
 
 const flagHTTPS = "https"

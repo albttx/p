@@ -12,8 +12,8 @@ import (
 	ucli "github.com/urfave/cli/v3"
 
 	"github.com/albttx/p/internal/shell"
-	"github.com/albttx/p/internal/tmux"
-	"github.com/albttx/p/internal/vcs"
+	"github.com/albttx/p/pkg/tmux"
+	"github.com/albttx/p/pkg/vcs"
 )
 
 // recorder is a Runner for both git and tmux that records argv and never

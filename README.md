@@ -93,6 +93,16 @@ rather than guessing — narrow it with `--owner`, `--host`, or a longer query.
 
 A missing config file is not an error. `--code-dir` overrides everything.
 
+## Packages
+
+The scanning and matching logic is importable:
+
+| package | what it gives you |
+|---|---|
+| [`pkg/projectsearcher`](pkg/projectsearcher) | `Scan` a tree, then `Match` / `Filter` / `Resolve` a typed fragment to one project |
+| [`pkg/tmux`](pkg/tmux) | session-per-project helpers over an injectable command runner |
+| [`pkg/vcs`](pkg/vcs) | repository spec → clone URL → destination path |
+
 ## Development
 
 ```sh

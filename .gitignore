@@ -1,6 +1,5 @@
 # Binaries
 /p
-/p-bin
 /dist/
 *.exe
 *.test

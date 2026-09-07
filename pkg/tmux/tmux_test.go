@@ -285,8 +285,8 @@ func TestQuoteArgv(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := QuoteArgv(tt.argv); got != tt.want {
-				t.Errorf("QuoteArgv(%q) = %q, want %q", tt.argv, got, tt.want)
+			if got := quoteArgv(tt.argv); got != tt.want {
+				t.Errorf("quoteArgv(%q) = %q, want %q", tt.argv, got, tt.want)
 			}
 		})
 	}
