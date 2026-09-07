@@ -274,3 +274,15 @@ go test ./internal/shell -update   # refresh the shim golden files
 is read through an injected lookup, so the tests assert the exact argv that
 would be executed — attach vs switch-client included — and never invoke real
 git or tmux.
+
+## Credits
+
+Inspired by [gfanton/project](https://github.com/gfanton/project) — a Go tool
+with the same core idea: keep every checkout in a `{owner}/{repo}` tree, then
+navigate it zoxide-style instead of typing paths. The directory layout, the
+shell-integration approach, and the clone/list/query command shape all come
+from there.
+
+`p` differs mainly in scope: it targets a host-qualified
+`{host}/{owner}/{repo}` tree, and folds in the tmux session-per-project
+workflow it was written to replace.
