@@ -3,9 +3,9 @@
 A project switcher for a GOPATH-style source tree.
 
 ```sh
-$ p p
+$ p nixpkgs
 $ pwd
-/Users/albttx/go/src/github.com/albttx/p
+/Users/albttx/go/src/github.com/albttx/nixpkgs
 ```
 
 Projects live at `$CODE_DIR/{host}/{owner}/{repo}`:
