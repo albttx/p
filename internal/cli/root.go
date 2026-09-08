@@ -114,6 +114,7 @@ func New(p Params) *ucli.Command {
 		Commands: []*ucli.Command{
 			cloneCommand(a),
 			addCommand(a),
+			newCommand(a),
 			listCommand(a),
 			queryCommand(a),
 			tmuxCommand(a),

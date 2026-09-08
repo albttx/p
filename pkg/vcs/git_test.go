@@ -161,3 +161,89 @@ func TestGitCustomBin(t *testing.T) {
 		t.Errorf("binary = %q, want /usr/local/bin/git", got)
 	}
 }
+
+func TestGitInit(t *testing.T) {
+	t.Parallel()
+
+	t.Run("creates the directory and runs git init in it", func(t *testing.T) {
+		t.Parallel()
+
+		root := t.TempDir()
+		dest := filepath.Join(root, "github.com", "albttx", "gh-todoist")
+
+		runner := &fakeRunner{}
+		if err := (Git{Runner: runner}).Init(context.Background(), dest); err != nil {
+			t.Fatalf("Init() error = %v", err)
+		}
+
+		if got, want := runner.argv(0), "git init "+dest; got != want {
+			t.Errorf("argv = %q, want %q", got, want)
+		}
+		if len(runner.calls) != 1 {
+			t.Errorf("Init() issued %d commands %v, want 1", len(runner.calls), runner.calls)
+		}
+		// The whole {host}/{owner}/{repo} prefix has to be created, not just
+		// the leaf.
+		if fi, err := os.Stat(dest); err != nil || !fi.IsDir() {
+			t.Errorf("destination %q not created: %v", dest, err)
+		}
+	})
+
+	t.Run("never overrides the user's default branch", func(t *testing.T) {
+		t.Parallel()
+
+		runner := &fakeRunner{}
+		if err := (Git{Runner: runner}).Init(context.Background(), t.TempDir()); err != nil {
+			t.Fatalf("Init() error = %v", err)
+		}
+		for _, arg := range runner.calls[0] {
+			if strings.Contains(arg, "initial-branch") || arg == "-b" {
+				t.Errorf("Init() passed a branch flag %q; init.defaultBranch is the user's to decide", arg)
+			}
+		}
+	})
+
+	t.Run("existing directory is not an error", func(t *testing.T) {
+		t.Parallel()
+
+		dest := t.TempDir() // already exists
+		runner := &fakeRunner{}
+		if err := (Git{Runner: runner}).Init(context.Background(), dest); err != nil {
+			t.Fatalf("Init() into an existing directory should succeed, got %v", err)
+		}
+		if got, want := runner.argv(0), "git init "+dest; got != want {
+			t.Errorf("argv = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("propagates the runner error", func(t *testing.T) {
+		t.Parallel()
+
+		sentinel := errors.New("git exploded")
+		err := Git{Runner: &fakeRunner{err: sentinel}}.Init(context.Background(), t.TempDir())
+		if !errors.Is(err, sentinel) {
+			t.Errorf("Init() error = %v, want it to wrap %v", err, sentinel)
+		}
+	})
+
+	t.Run("no runner configured", func(t *testing.T) {
+		t.Parallel()
+
+		if err := (Git{}).Init(context.Background(), t.TempDir()); err == nil {
+			t.Fatal("Init() without a runner should fail")
+		}
+	})
+
+	t.Run("custom bin", func(t *testing.T) {
+		t.Parallel()
+
+		runner := &fakeRunner{}
+		git := Git{Runner: runner, Bin: "/usr/local/bin/git"}
+		if err := git.Init(context.Background(), t.TempDir()); err != nil {
+			t.Fatalf("Init() error = %v", err)
+		}
+		if got := runner.calls[0][0]; got != "/usr/local/bin/git" {
+			t.Errorf("binary = %q, want /usr/local/bin/git", got)
+		}
+	})
+}

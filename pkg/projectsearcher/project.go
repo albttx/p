@@ -130,7 +130,7 @@ func (s *scanner) run() ([]Project, error) {
 			return nil
 		}
 
-		if isRepo(path) {
+		if IsRepo(path) {
 			projects = append(projects, Project{
 				Root:  s.root,
 				Host:  parts[0],
@@ -150,8 +150,14 @@ func (s *scanner) run() ([]Project, error) {
 	return projects, nil
 }
 
-// isRepo reports whether dir holds a .git entry marking a real checkout.
-func isRepo(dir string) bool {
+// IsRepo reports whether dir is a checkout, by the same rule [Scan] applies: it
+// holds a .git entry that is either a directory or a regular file.
+//
+// It is exported so that a tool creating a project can check, against a single
+// definition, that what it produced will actually be found by [Scan]. Note that
+// IsRepo asks only about dir itself and says nothing about its depth, so a
+// directory can satisfy IsRepo and still not be reported by Scan.
+func IsRepo(dir string) bool {
 	fi, err := os.Stat(filepath.Join(dir, ".git"))
 	if err != nil {
 		return false

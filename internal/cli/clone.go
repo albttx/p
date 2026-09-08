@@ -22,12 +22,14 @@ const specForms = "Accepts github.com/owner/repo, owner/repo (host defaults to g
 func cloneCommand(a *app) *ucli.Command {
 	return &ucli.Command{
 		Name:      "clone",
-		Usage:     "clone a repository into the source tree (fetch only)",
+		Usage:     "fetch an existing repo, nothing else",
 		ArgsUsage: "<spec>",
 		Description: specForms + "\n\n" +
 			"Clones over SSH into $CODE_DIR/{host}/{owner}/{repo}, creating parent\n" +
-			"directories, and prints the destination. No tmux session, no attach —\n" +
-			"use `p add` for that.",
+			"directories, and prints the destination. No tmux session and no attach, so\n" +
+			"it cannot block: this is the one to use from scripts and CI.\n\n" +
+			"See `p add` to clone and start working, or `p new` for a project with no\n" +
+			"remote yet.",
 		Flags: []ucli.Flag{
 			&ucli.BoolFlag{Name: flagHTTPS, Usage: "clone over HTTPS instead of SSH", Local: true},
 		},

@@ -258,3 +258,58 @@ func TestSortIsCaseInsensitive(t *testing.T) {
 		}
 	}
 }
+
+// TestIsRepo covers the exported form of the rule Scan applies, which is what
+// a tool creating a project checks against to know Scan will find it.
+func TestIsRepo(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	mkRepo(t, root, "clone", false)    // .git directory
+	mkRepo(t, root, "worktree", true)  // .git regular file
+	mkDir(t, root, "plain")            // no .git at all
+	mkDir(t, root, "nested/deep/repo") // depth is not IsRepo's concern
+	mkRepo(t, root, "nested/deep/repo", false)
+
+	tests := []struct {
+		name string
+		dir  string
+		want bool
+	}{
+		{name: "git directory", dir: "clone", want: true},
+		{name: "git file worktree", dir: "worktree", want: true},
+		{name: "no git entry", dir: "plain", want: false},
+		{name: "missing directory", dir: "does-not-exist", want: false},
+		{name: "IsRepo ignores depth", dir: "nested/deep/repo", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsRepo(filepath.Join(root, filepath.FromSlash(tt.dir))); got != tt.want {
+				t.Errorf("IsRepo(%s) = %v, want %v", tt.dir, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestIsRepoAgreesWithScan pins the two together: anything Scan reports must
+// satisfy IsRepo, or a caller using IsRepo to decide whether to git init would
+// make a project Scan cannot see.
+func TestIsRepoAgreesWithScan(t *testing.T) {
+	t.Parallel()
+
+	root := fixture(t)
+	projects, err := Scan(root)
+	if err != nil {
+		t.Fatalf("Scan() error = %v", err)
+	}
+	if len(projects) == 0 {
+		t.Fatal("fixture produced no projects")
+	}
+	for _, p := range projects {
+		if !IsRepo(p.Path()) {
+			t.Errorf("Scan reported %s but IsRepo says it is not a repository", p.Full())
+		}
+	}
+}

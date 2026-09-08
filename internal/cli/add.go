@@ -22,13 +22,15 @@ import (
 func addCommand(a *app) *ucli.Command {
 	return &ucli.Command{
 		Name:      "add",
-		Usage:     "clone if missing, ensure a tmux session, and go there",
+		Usage:     "existing repo: clone if missing, then session + attach",
 		ArgsUsage: "<spec>",
 		Description: specForms + "\n\n" +
 			"Clones into $CODE_DIR/{host}/{owner}/{repo} only if that path does not\n" +
 			"already exist, creates a detached tmux session named owner/repo rooted\n" +
 			"there unless one exists, then attaches — or switches, if you are already\n" +
-			"inside tmux. Safe to re-run. Use `p clone` for a fetch with no session.",
+			"inside tmux. Safe to re-run.\n\n" +
+			"See `p clone` to fetch without a session, or `p new` for a project that\n" +
+			"does not exist anywhere yet.",
 		Flags: []ucli.Flag{
 			&ucli.BoolFlag{Name: flagHTTPS, Usage: "clone over HTTPS instead of SSH", Local: true},
 			&ucli.BoolFlag{Name: flagNoAttach, Usage: "clone and create the session but stay put", Local: true},
@@ -53,31 +55,37 @@ func addCommand(a *app) *ucli.Command {
 				fmt.Fprintf(a.stderr, "p: cloned %s to %s\n", spec.Full(), dest)
 			}
 
-			// Steps 2 and 3 talk to tmux, which needs the real terminal: this
-			// command is normally run through the shell shim, whose command
-			// substitution has already captured stdout.
-			runner, release := a.tmuxRunner(false)
-			defer release()
-
-			client := tmux.Client{Runner: runner}
-			session := spec.Owner + "/" + spec.Repo
-
-			created, err := client.EnsureSession(ctx, session, dest)
-			if err != nil {
-				return err
-			}
-			if created {
-				fmt.Fprintf(a.stderr, "p: created tmux session %s\n", session)
-			}
-
-			if cmd.Bool(flagNoAttach) {
-				return nil
-			}
-			// Nothing here writes to stdout: p add moves the user through
-			// tmux, never through the cd sentinel.
-			return client.Focus(ctx, session, a.inTmux())
+			return a.enterProject(ctx, spec.Owner+"/"+spec.Repo, dest, cmd.Bool(flagNoAttach))
 		},
 	}
+}
+
+// enterProject ensures the tmux session for a checkout and puts the user in
+// it. It is the shared tail of `p add` and `p new`, which differ only in how
+// the directory came to exist.
+//
+// Nothing here writes to stdout: both commands move the user through tmux,
+// never through the cd sentinel, so stdout stays clean for the shell shim.
+func (a *app) enterProject(ctx context.Context, session, dir string, noAttach bool) error {
+	// tmux needs the real terminal. These commands are normally run through
+	// the shell shim, whose command substitution has already captured stdout.
+	runner, release := a.tmuxRunner(false)
+	defer release()
+
+	client := tmux.Client{Runner: runner}
+
+	created, err := client.EnsureSession(ctx, session, dir)
+	if err != nil {
+		return err
+	}
+	if created {
+		fmt.Fprintf(a.stderr, "p: created tmux session %s\n", tmux.SessionName(session))
+	}
+
+	if noAttach {
+		return nil
+	}
+	return client.Focus(ctx, session, a.inTmux())
 }
 
 // dirExists reports whether path is present, treating a non-directory as

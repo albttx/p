@@ -83,6 +83,27 @@ func (g Git) bin() string {
 	return g.Bin
 }
 
+// Init runs "git init" in dir, creating dir and its parents first.
+//
+// It deliberately passes no --initial-branch or other branch flag, so the
+// user's own init.defaultBranch configuration decides the branch name.
+//
+// git init is itself idempotent — re-running it in an existing repository just
+// reinitialises it — but callers that want to avoid the noise should check
+// first; see projectsearcher.IsRepo.
+func (g Git) Init(ctx context.Context, dir string) error {
+	if g.Runner == nil {
+		return fmt.Errorf("init %s: no runner configured", dir)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", dir, err)
+	}
+	if err := g.Runner.Run(ctx, g.bin(), "init", dir); err != nil {
+		return fmt.Errorf("init %s: %w", dir, err)
+	}
+	return nil
+}
+
 // Clone runs "git clone url dest", creating dest's parent directories first so
 // that a fresh {host}/{owner} prefix does not have to exist beforehand.
 //

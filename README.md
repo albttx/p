@@ -61,6 +61,7 @@ p completion fish | source
 | `p query [term]` | print every project the term matches |
 | `p clone <spec>` | clone into `$CODE_DIR/{host}/{owner}/{repo}` — fetch only |
 | `p add <spec>` | clone if missing, then create and attach a tmux session |
+| `p new <spec>` | create a new local project, `git init` it, then session + attach |
 | `p tmux` | ensure a tmux session per project, then attach |
 | `p init <shell>` | print the `cd` wrapper for zsh, bash or fish |
 | `p completion <shell>` | print tab completion for zsh, bash, fish or pwsh |
@@ -68,6 +69,8 @@ p completion fish | source
 `p clone` is the inert half — it fetches and prints the destination, nothing
 else, so it's safe for scripts and CI. `p add` is "start working on this":
 clone if needed, spin up a tmux session named `owner/repo`, and attach to it.
+`p new` is `add` for a project that has no remote yet — it creates the
+directory and `git init`s it instead of cloning, so `p list` picks it up.
 
 The commands that select projects — `p <query>`, `path`, `list`, `query` and
 `tmux` — accept `--host`, `--owner` and `--exclude PATTERN` (repeatable) to
