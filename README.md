@@ -1,5 +1,7 @@
 # p
 
+![p — one keystroke away from any project](.github/assets/banner.jpg)
+
 A project switcher for a GOPATH-style source tree.
 
 ```sh
