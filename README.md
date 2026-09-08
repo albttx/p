@@ -11,8 +11,8 @@ $ pwd
 Projects live at `$CODE_DIR/{host}/{owner}/{repo}`:
 
 ```
-/Users/albttx/go/src/github.com/albttx/p
-└──── CODE_DIR ────┘ └──host──┘ └owner┘└repo┘
+/Users/albttx/go/src/github.com/albttx/nixpkgs
+└──── CODE_DIR ────┘ └──host──┘ └owner┘└─repo─┘
 ```
 
 `p <query>` resolves a short name to exactly one project and drops you in it.
