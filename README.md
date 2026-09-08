@@ -3,16 +3,16 @@
 A project switcher for a GOPATH-style source tree.
 
 ```sh
-$ p kontacts
+$ p p
 $ pwd
-/Users/albttx/go/src/github.com/albttx/kontacts.dev
+/Users/albttx/go/src/github.com/albttx/p
 ```
 
 Projects live at `$CODE_DIR/{host}/{owner}/{repo}`:
 
 ```
 /Users/albttx/go/src/github.com/albttx/p
-└──────── CODE_DIR ────────┘ └─host─┘ └owner┘ └repo┘
+└──── CODE_DIR ────┘ └──host──┘ └owner┘└repo┘
 ```
 
 `p <query>` resolves a short name to exactly one project and drops you in it.
@@ -95,6 +95,15 @@ rather than guessing — narrow it with `--owner`, `--host`, or a longer query.
 3. `$HOME/codes`
 
 A missing config file is not an error. `--code-dir` overrides everything.
+
+<details>
+<summary>example config.yaml</summary>
+
+```yaml
+# ~/.config/p/config.yaml
+code_dir: ~/go/src
+```
+</details>
 
 ## Packages
 
