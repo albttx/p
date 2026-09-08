@@ -160,7 +160,9 @@ func TestNew(t *testing.T) {
 					t.Errorf("p new issued a clone: %s", argv)
 				}
 			}
-			// It moves the user through tmux, so stdout stays clean.
+			// These cases run with stdoutTTY true, so p attaches in-process
+			// and writes nothing; only the captured-stdout path emits the
+			// attach sentinel (see TestFocusRoutes).
 			if h.out() != "" {
 				t.Errorf("p new wrote to stdout: %q, want empty", h.out())
 			}

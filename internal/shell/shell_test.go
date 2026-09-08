@@ -236,3 +236,56 @@ func shimBody(shim string) string {
 	}
 	return b.String()
 }
+
+// TestShimHandlesAttachSentinel checks that every shim acts on the attach
+// sentinel, and does so outside the command substitution.
+//
+// Running `tmux attach` inside $(...) is the bug this sentinel exists to
+// avoid, so the tmux call must appear in the function body, not within the
+// capture of the p invocation.
+func TestShimHandlesAttachSentinel(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range Supported() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := Shim(name, Options{})
+			if err != nil {
+				t.Fatalf("Shim(%q) error = %v", name, err)
+			}
+
+			for _, want := range []string{
+				SentinelTmux,          // dispatches on it
+				"command tmux attach", // and attaches
+				"-t=",                 // with an exact target
+			} {
+				if !strings.Contains(got, want) {
+					t.Errorf("%s shim is missing %q:\n%s", name, want, got)
+				}
+			}
+
+			// The attach must not sit inside the command substitution that
+			// captures p's output.
+			for _, line := range strings.Split(got, "\n") {
+				if !strings.Contains(line, "tmux attach") {
+					continue
+				}
+				if strings.Contains(line, "command "+DefaultBinary+" ") {
+					t.Errorf("%s shim attaches inside the p capture, which cannot work: %s", name, line)
+				}
+			}
+
+			// Both sentinels must be handled, and the cd arm must still come
+			// first so behaviour is unambiguous.
+			cd := strings.Index(got, SentinelCD+"*")
+			tm := strings.Index(got, SentinelTmux+"*")
+			if cd < 0 || tm < 0 {
+				t.Fatalf("%s shim does not dispatch on both sentinels:\n%s", name, got)
+			}
+			if cd > tm {
+				t.Errorf("%s shim checks the attach sentinel before the cd sentinel", name)
+			}
+		})
+	}
+}

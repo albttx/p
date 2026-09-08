@@ -52,6 +52,25 @@ type Runner interface {
 	Output(ctx context.Context, name string, args ...string) ([]byte, error)
 }
 
+// QuietRunner is an optional extension of [Runner] for commands whose standard
+// error is noise rather than a diagnostic.
+//
+// [Client.HasSession] is the motivating case. It is a probe: the answer is the
+// boolean, and tmux prints "can't find session: NAME" to stderr every time the
+// answer is no. Since a missing session is the normal path for `p add` and
+// `p new`, a Runner wired to the user's terminal would print that on every
+// run. A Runner that implements QuietRunner has RunQuiet used for probes,
+// while genuine failures from new-session, attach and switch-client still go
+// through Run and stay visible.
+//
+// [ExecRunner] and [DryRunner] both implement it. A Runner that does not is
+// used as-is, so implementing this is optional.
+type QuietRunner interface {
+	Runner
+	// RunQuiet executes the command with its standard error discarded.
+	RunQuiet(ctx context.Context, name string, args ...string) error
+}
+
 // ExecRunner runs commands with os/exec.
 //
 // The zero value is usable but not what you want for attaching: p's own stdout
@@ -103,6 +122,14 @@ func (r ExecRunner) Run(ctx context.Context, name string, args ...string) error 
 	return cmd.Run()
 }
 
+// RunQuiet executes the command with its standard error discarded, leaving the
+// configured Stderr untouched. It implements [QuietRunner].
+func (r ExecRunner) RunQuiet(ctx context.Context, name string, args ...string) error {
+	quiet := r
+	quiet.Stderr = io.Discard
+	return quiet.Run(ctx, name, args...)
+}
+
 // Output executes the command and returns its standard output.
 func (r ExecRunner) Output(ctx context.Context, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
@@ -146,6 +173,13 @@ func (d DryRunner) Run(_ context.Context, name string, args ...string) error {
 		return errNoSession
 	}
 	return nil
+}
+
+// RunQuiet behaves exactly like [DryRunner.Run]: a dry run is meant to show
+// every command that would be issued, including probes. It implements
+// [QuietRunner].
+func (d DryRunner) RunQuiet(ctx context.Context, name string, args ...string) error {
+	return d.Run(ctx, name, args...)
 }
 
 // Output prints the argv and returns no data.
@@ -220,6 +254,13 @@ func Target(session string) string { return "-t=" + SessionName(session) }
 // rewritten name. A failure to reach tmux at all is indistinguishable from a
 // missing session and is reported as false.
 func (c Client) HasSession(ctx context.Context, session string) bool {
+	// tmux writes "can't find session: NAME" to stderr whenever the answer is
+	// no, which is the normal path for a project that has not been opened yet.
+	// That is noise, not a diagnostic, so it is discarded when the Runner
+	// supports it. See [QuietRunner].
+	if q, ok := c.Runner.(QuietRunner); ok {
+		return q.RunQuiet(ctx, c.bin(), "has-session", Target(session)) == nil
+	}
 	return c.Runner.Run(ctx, c.bin(), "has-session", Target(session)) == nil
 }
 

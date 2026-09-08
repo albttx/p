@@ -62,7 +62,14 @@ func tmuxCommand(a *app) *ucli.Command {
 			if cmd.Bool(flagNoAttach) {
 				return nil
 			}
-			return client.Attach(ctx)
+			if cmd.Bool(flagDryRun) {
+				// A dry run shows the argv it would issue rather than
+				// delegating anything to the shell.
+				return client.Attach(ctx)
+			}
+			// Same terminal problem as `p add`: attaching from inside the
+			// shim's command substitution cannot work, so route through focus.
+			return a.focus(ctx, client, "")
 		},
 	}
 }

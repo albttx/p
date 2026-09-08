@@ -62,23 +62,28 @@ func tree(t *testing.T, repos ...string) string {
 
 // harness runs the command tree with captured output.
 type harness struct {
-	t      *testing.T
-	root   string
-	git    *recorder
-	tmux   *recorder
-	env    map[string]string
-	stdout bytes.Buffer
-	stderr bytes.Buffer
+	t    *testing.T
+	root string
+	git  *recorder
+	tmux *recorder
+	env  map[string]string
+	// stdoutTTY simulates p's stdout being a terminal rather than the shell
+	// shim's pipe. It defaults to true, so tests assert the in-process attach
+	// unless they deliberately exercise the captured-stdout path.
+	stdoutTTY bool
+	stdout    bytes.Buffer
+	stderr    bytes.Buffer
 }
 
 func newHarness(t *testing.T, repos ...string) *harness {
 	t.Helper()
 	return &harness{
-		t:    t,
-		root: tree(t, repos...),
-		git:  &recorder{},
-		tmux: &recorder{existing: map[string]bool{}},
-		env:  map[string]string{},
+		t:         t,
+		root:      tree(t, repos...),
+		git:       &recorder{},
+		tmux:      &recorder{existing: map[string]bool{}},
+		env:       map[string]string{},
+		stdoutTTY: true,
 	}
 }
 
@@ -98,6 +103,8 @@ func (h *harness) run(args ...string) error {
 		Git:     h.git,
 		Tmux:    h.tmux,
 		Getenv:  func(k string) string { return h.env[k] },
+
+		StdoutIsTerminal: func() bool { return h.stdoutTTY },
 	})
 	cmd.ExitErrHandler = func(context.Context, *ucli.Command, error) {}
 
@@ -119,6 +126,8 @@ func (h *harness) runRaw(argv []string) error {
 		Git:     h.git,
 		Tmux:    h.tmux,
 		Getenv:  func(k string) string { return h.env[k] },
+
+		StdoutIsTerminal: func() bool { return h.stdoutTTY },
 	})
 	cmd.ExitErrHandler = func(context.Context, *ucli.Command, error) {}
 

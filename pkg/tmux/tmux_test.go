@@ -555,3 +555,76 @@ func TestErrorNamesBothForms(t *testing.T) {
 		}
 	}
 }
+
+// TestHasSessionDoesNotLeakProbeStderr is the regression test for the noise
+// the user saw on every `p add`:
+//
+//	can't find session: albttx/gh-todoist
+//
+// tmux writes that to stderr whenever has-session says no, which is the normal
+// path for a project not yet opened. The probe's answer is its exit status, so
+// its stderr must not reach the caller's terminal — while real failures from
+// the other subcommands still must.
+func TestHasSessionDoesNotLeakProbeStderr(t *testing.T) {
+	t.Parallel()
+
+	var stderr bytes.Buffer
+	runner := ExecRunner{Stdout: &bytes.Buffer{}, Stderr: &stderr}
+
+	// Stand in for tmux: fail, and complain on stderr exactly as tmux does.
+	got := runner.RunQuiet(context.Background(),
+		"sh", "-c", "echo \"can't find session: albttx/gh-todoist\" >&2; exit 1")
+	if got == nil {
+		t.Fatal("RunQuiet should still report the non-zero exit")
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("probe leaked to the caller's stderr: %q", stderr.String())
+	}
+
+	// The same command through Run must stay visible: this is what keeps
+	// genuine new-session and attach failures reportable.
+	stderr.Reset()
+	_ = runner.Run(context.Background(), "sh",
+		"-c", "echo 'real failure' >&2; exit 1")
+	if !strings.Contains(stderr.String(), "real failure") {
+		t.Errorf("Run swallowed a genuine diagnostic: %q", stderr.String())
+	}
+}
+
+// TestHasSessionUsesTheQuietPath asserts the wiring, since the behaviour above
+// only helps if Client actually reaches for it.
+func TestHasSessionUsesTheQuietPath(t *testing.T) {
+	t.Parallel()
+
+	q := &quietSpy{fakeRunner: fakeRunner{existing: map[string]bool{}}}
+	if (Client{Runner: q}).HasSession(context.Background(), "albttx/gh-todoist") {
+		t.Error("HasSession should report false for a missing session")
+	}
+	if !q.quietUsed {
+		t.Error("HasSession did not use RunQuiet, so tmux's probe noise would reach the terminal")
+	}
+
+	// A Runner that does not implement QuietRunner must still work.
+	plain := newFakeRunner("albttx/p")
+	if !(Client{Runner: plain}).HasSession(context.Background(), "albttx/p") {
+		t.Error("HasSession should fall back to Run for a plain Runner")
+	}
+}
+
+// quietSpy records whether the quiet path was taken.
+type quietSpy struct {
+	fakeRunner
+	quietUsed bool
+}
+
+func (q *quietSpy) RunQuiet(ctx context.Context, name string, args ...string) error {
+	q.quietUsed = true
+	return q.Run(ctx, name, args...)
+}
+
+// Both shipped runners must satisfy the optional interface, or Client silently
+// falls back to the noisy path.
+var (
+	_ QuietRunner = ExecRunner{}
+	_ QuietRunner = DryRunner{}
+)

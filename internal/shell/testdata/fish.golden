@@ -15,6 +15,15 @@ function p --description 'jump to a project'
         builtin cd $dir
         return $status
     end
+    if string match -q -- '__P_TMUX__*' "$out"
+        set -l session (string replace -- '__P_TMUX__' '' "$out")
+        if test -n "$session"
+            command tmux attach -t="$session"
+        else
+            command tmux attach
+        end
+        return $status
+    end
     printf '%s\n' "$out"
     return 0
 end

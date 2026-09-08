@@ -14,9 +14,25 @@ import (
 	"text/template"
 )
 
-// SentinelCD prefixes the one stdout line that asks the shell to change
-// directory: "__P_CD__/abs/path".
+// SentinelCD prefixes the stdout line that asks the shell to change directory:
+// "__P_CD__/abs/path". It is written only by navigation, `p <query>`.
 const SentinelCD = "__P_CD__"
+
+// SentinelTmux prefixes the stdout line that asks the shell to attach to a
+// tmux session: "__P_TMUX__owner/repo_name".
+//
+// It exists for the same reason as [SentinelCD]. A child process cannot change
+// its parent's working directory, and it equally cannot take over the parent's
+// terminal: "tmux attach" needs the controlling terminal, and p's stdout is a
+// pipe inside the shim's command substitution, so an in-process attach fails
+// with "open terminal failed: can't use /dev/tty". Delegating to the shell
+// function, which runs after the substitution has closed, is the only way it
+// can work.
+//
+// The payload is already in [tmux.SessionName] form, so the shim can pass it
+// straight to "tmux attach -t=". An empty payload means "attach to the server
+// without naming a session", which is what `p tmux` wants.
+const SentinelTmux = "__P_TMUX__"
 
 // DefaultBinary is the name the shim invokes.
 //
@@ -57,12 +73,14 @@ func Shim(name string, opts Options) (string, error) {
 	}
 
 	data := struct {
-		Binary   string
-		Func     string
-		Sentinel string
+		Binary       string
+		Func         string
+		Sentinel     string
+		SentinelTmux string
 	}{}
 	o := opts.withDefaults()
-	data.Binary, data.Func, data.Sentinel = o.Binary, o.Func, SentinelCD
+	data.Binary, data.Func = o.Binary, o.Func
+	data.Sentinel, data.SentinelTmux = SentinelCD, SentinelTmux
 
 	var b strings.Builder
 	if err := tmpl.Execute(&b, data); err != nil {
@@ -95,6 +113,14 @@ const zshShim = `# p shell integration for zsh. Add to ~/.zshrc, in this order:
   out="$(command {{.Binary}} "$@")" || return $?
   case "$out" in
     {{.Sentinel}}*) builtin cd -- "${out#{{.Sentinel}}}" ;;
+    {{.SentinelTmux}}*)
+      local session="${out#{{.SentinelTmux}}}"
+      if [ -n "$session" ]; then
+        command tmux attach -t="$session"
+      else
+        command tmux attach
+      fi
+      return $? ;;
     *) [ -n "$out" ] && print -r -- "$out" ;;
   esac
   return 0
@@ -109,6 +135,14 @@ const bashShim = `# p shell integration for bash. Add to ~/.bashrc, in this orde
   out="$(command {{.Binary}} "$@")" || return $?
   case "$out" in
     {{.Sentinel}}*) builtin cd -- "${out#{{.Sentinel}}}" ;;
+    {{.SentinelTmux}}*)
+      local session="${out#{{.SentinelTmux}}}"
+      if [ -n "$session" ]; then
+        command tmux attach -t="$session"
+      else
+        command tmux attach
+      fi
+      return $? ;;
     *) [ -n "$out" ] && printf '%s\n' "$out" ;;
   esac
   return 0
@@ -134,6 +168,15 @@ function {{.Func}} --description 'jump to a project'
     if string match -q -- '{{.Sentinel}}*' "$out"
         set -l dir (string replace -- '{{.Sentinel}}' '' "$out")
         builtin cd $dir
+        return $status
+    end
+    if string match -q -- '{{.SentinelTmux}}*' "$out"
+        set -l session (string replace -- '{{.SentinelTmux}}' '' "$out")
+        if test -n "$session"
+            command tmux attach -t="$session"
+        else
+            command tmux attach
+        end
         return $status
     end
     printf '%s\n' "$out"

@@ -46,6 +46,11 @@ type Params struct {
 	// Getenv reads the environment. Defaults to os.Getenv. It exists so tests
 	// can drive the $TMUX branch in "p add" without a tmux server.
 	Getenv func(string) string
+	// StdoutIsTerminal reports whether p's stdout is a terminal rather than a
+	// pipe. It decides whether tmux can be attached in-process or has to be
+	// delegated to the shell shim; see [app.focus]. Defaults to inspecting
+	// os.Stdout.
+	StdoutIsTerminal func() bool
 }
 
 // app holds the dependencies shared by every command action.
@@ -56,11 +61,23 @@ type app struct {
 	tmux          tmux.Runner
 	newTmuxRunner func() (tmux.Runner, func())
 	getenv        func(string) string
+	stdoutIsTTY   func() bool
 }
 
 // inTmux reports whether p is running inside a tmux session. tmux sets $TMUX
 // for every process it spawns, and "tmux attach" refuses to run there.
 func (a *app) inTmux() bool { return a.getenv("TMUX") != "" }
+
+// stdoutIsTerminal reports whether the process stdout is a character device,
+// which is true when p was run directly in a terminal and false when the shell
+// shim captured it with $(...).
+func stdoutIsTerminal() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
 
 // New builds the root command.
 func New(p Params) *ucli.Command {
@@ -71,9 +88,13 @@ func New(p Params) *ucli.Command {
 		tmux:          p.Tmux,
 		newTmuxRunner: p.NewTmuxRunner,
 		getenv:        p.Getenv,
+		stdoutIsTTY:   p.StdoutIsTerminal,
 	}
 	if a.getenv == nil {
 		a.getenv = os.Getenv
+	}
+	if a.stdoutIsTTY == nil {
+		a.stdoutIsTTY = stdoutIsTerminal
 	}
 	if a.stdout == nil {
 		a.stdout = os.Stdout

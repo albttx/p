@@ -13,7 +13,8 @@ import (
 // navigate is the root action: it runs for any first argument that is not a
 // subcommand, resolves it to exactly one project, and emits the cd sentinel.
 //
-// This is the only command that writes the sentinel. Ambiguity and misses go
+// This is the only command that writes the cd sentinel; `p add`, `p new` and
+// `p tmux` may write the attach sentinel instead. Ambiguity and misses go
 // to stderr as errors so stdout stays empty and the shell shim has nothing to
 // cd to.
 func (a *app) navigate(ctx context.Context, cmd *ucli.Command) error {

@@ -6,6 +6,14 @@ p() {
   out="$(command p "$@")" || return $?
   case "$out" in
     __P_CD__*) builtin cd -- "${out#__P_CD__}" ;;
+    __P_TMUX__*)
+      local session="${out#__P_TMUX__}"
+      if [ -n "$session" ]; then
+        command tmux attach -t="$session"
+      else
+        command tmux attach
+      fi
+      return $? ;;
     *) [ -n "$out" ] && printf '%s\n' "$out" ;;
   esac
   return 0

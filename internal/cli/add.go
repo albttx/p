@@ -9,6 +9,7 @@ import (
 
 	ucli "github.com/urfave/cli/v3"
 
+	"github.com/albttx/p/internal/shell"
 	"github.com/albttx/p/pkg/tmux"
 	"github.com/albttx/p/pkg/vcs"
 )
@@ -63,12 +64,7 @@ func addCommand(a *app) *ucli.Command {
 // enterProject ensures the tmux session for a checkout and puts the user in
 // it. It is the shared tail of `p add` and `p new`, which differ only in how
 // the directory came to exist.
-//
-// Nothing here writes to stdout: both commands move the user through tmux,
-// never through the cd sentinel, so stdout stays clean for the shell shim.
 func (a *app) enterProject(ctx context.Context, session, dir string, noAttach bool) error {
-	// tmux needs the real terminal. These commands are normally run through
-	// the shell shim, whose command substitution has already captured stdout.
 	runner, release := a.tmuxRunner(false)
 	defer release()
 
@@ -85,7 +81,49 @@ func (a *app) enterProject(ctx context.Context, session, dir string, noAttach bo
 	if noAttach {
 		return nil
 	}
-	return client.Focus(ctx, session, a.inTmux())
+	return a.focus(ctx, client, session)
+}
+
+// focus puts the user into a tmux session, by whichever of three routes can
+// actually work from where p is running.
+//
+//   - Already inside tmux: switch-client. It only messages the running server
+//     and needs no terminal, so it works even under command substitution.
+//   - Outside tmux with stdout on a terminal: attach in-process. p was run
+//     directly rather than through the shim, so it still owns the terminal.
+//   - Outside tmux with stdout captured: emit [shell.SentinelTmux] and let the
+//     shell function attach once the substitution has closed.
+//
+// The third case is the one that matters in daily use, and it is why this is
+// not simply a call to tmux.Client.Focus. "tmux attach" has to take over the
+// controlling terminal, which a process whose stdout is a pipe cannot do; it
+// fails with "open terminal failed: can't use /dev/tty". Reopening /dev/tty is
+// not enough. Delegating to the parent shell is the same trick the cd sentinel
+// uses, for the same underlying reason.
+//
+// An empty session means "attach to the server without naming a session".
+func (a *app) focus(ctx context.Context, client tmux.Client, session string) error {
+	if a.inTmux() {
+		if session == "" {
+			// Already inside tmux and no particular session was asked for:
+			// there is nothing to attach to.
+			fmt.Fprintln(a.stderr, "p: already inside tmux, not attaching")
+			return nil
+		}
+		return client.SwitchClient(ctx, session)
+	}
+
+	if a.stdoutIsTTY() {
+		if session == "" {
+			return client.Attach(ctx)
+		}
+		return client.AttachSession(ctx, session)
+	}
+
+	// stdout is captured, so hand the attach to the shell shim. The payload is
+	// already sanitised: the shim passes it straight to "tmux attach -t=".
+	_, err := fmt.Fprintln(a.stdout, shell.SentinelTmux+tmux.SessionName(session))
+	return err
 }
 
 // dirExists reports whether path is present, treating a non-directory as
