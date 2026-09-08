@@ -7,14 +7,14 @@ A project switcher for a GOPATH-style source tree.
 ```sh
 $ p nixpkgs
 $ pwd
-/Users/albttx/go/src/github.com/albttx/nixpkgs
+$HOME/codes/github.com/albttx/nixpkgs
 ```
 
 Projects live at `$CODE_DIR/{host}/{owner}/{repo}`:
 
 ```
-/Users/albttx/go/src/github.com/albttx/nixpkgs
-└──── CODE_DIR ────┘ └──host──┘ └owner┘└─repo─┘
+$HOME/codes/github.com/albttx/nixpkgs
+└─CODE_DIR─┘└──host──┘ └owner┘└─repo─┘
 ```
 
 `p <query>` resolves a short name to exactly one project and drops you in it.
