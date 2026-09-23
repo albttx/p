@@ -11,12 +11,14 @@ import (
 )
 
 // navigate is the root action: it runs for any first argument that is not a
-// subcommand, resolves it to exactly one project, and emits the cd sentinel.
+// subcommand, resolves it to exactly one project, and emits the cd sentinel —
+// or, with --tmux (config: tmux), enters the project's tmux session the way
+// `p add` does.
 //
-// This is the only command that writes the cd sentinel; `p add`, `p new` and
-// `p tmux` may write the attach sentinel instead. Ambiguity and misses go
-// to stderr as errors so stdout stays empty and the shell shim has nothing to
-// cd to.
+// This is the only command that writes the cd sentinel; `p add`, `p new`,
+// `p tmux` and the --tmux path here may write the attach sentinel instead.
+// Ambiguity and misses go to stderr as errors so stdout stays empty and the
+// shell shim has nothing to cd to.
 func (a *app) navigate(ctx context.Context, cmd *ucli.Command) error {
 	args := cmd.Args().Slice()
 	if len(args) == 0 {
@@ -32,6 +34,13 @@ func (a *app) navigate(ctx context.Context, cmd *ucli.Command) error {
 	p, err := a.resolve(cmd, args[0])
 	if err != nil {
 		return err
+	}
+	if cmd.Bool(flagTmux) {
+		// Session-per-project navigation: the shared tail of `p add`, minus
+		// the clone. No cd sentinel — the session is already rooted at the
+		// project, and inside tmux a cd of the calling shell would land in a
+		// pane the user just switched away from.
+		return a.enterProject(ctx, p.Name(), p.Path(), false)
 	}
 	_, err = fmt.Fprintln(a.stdout, shell.SentinelCD+p.Path())
 	return err

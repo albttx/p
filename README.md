@@ -98,12 +98,17 @@ rather than guessing — narrow it with `--owner`, `--host`, or a longer query.
 
 A missing config file is not an error. `--code-dir` overrides everything.
 
+With `tmux: true` in the config file, `p <query>` opens the project in its
+tmux session instead of a plain `cd`: switch if the session exists, create it
+first if not. Override per invocation with `--tmux` or `--tmux=false`.
+
 <details>
 <summary>example config.yaml</summary>
 
 ```yaml
 # ~/.config/p/config.yaml
 code_dir: ~/go/src
+tmux: true    # p <query> enters the project's tmux session
 ```
 </details>
 

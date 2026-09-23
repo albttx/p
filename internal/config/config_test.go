@@ -201,6 +201,57 @@ func TestResolvePrecedence(t *testing.T) {
 	}
 }
 
+// TestResolveTmux pins the tmux key down, in particular that it survives
+// $CODE_DIR being set: the env var short-circuits only code_dir, not the file.
+func TestResolveTmux(t *testing.T) {
+	t.Parallel()
+
+	const home = "/home/albttx"
+
+	tests := []struct {
+		name       string
+		vars       map[string]string
+		configBody string
+		noFile     bool
+		want       bool
+	}{
+		{name: "absent defaults to false", configBody: "code_dir: /from/file\n", want: false},
+		{name: "missing file defaults to false", noFile: true, want: false},
+		{name: "tmux true", configBody: "tmux: true\n", want: true},
+		{name: "tmux false is explicit", configBody: "tmux: false\n", want: false},
+		{
+			name:       "tmux is read even when $CODE_DIR wins",
+			vars:       map[string]string{EnvCodeDir: "/from/env"},
+			configBody: "code_dir: /from/file\ntmux: true\n",
+			want:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			configPath := filepath.Join(dir, "config.yaml")
+			if !tt.noFile {
+				configPath = writeConfig(t, dir, tt.configBody)
+			}
+
+			got, err := Resolve(Options{
+				Getenv:     env(tt.vars),
+				Home:       home,
+				ConfigPath: configPath,
+			})
+			if err != nil {
+				t.Fatalf("Resolve() error = %v", err)
+			}
+			if got.Tmux != tt.want {
+				t.Errorf("Tmux = %v, want %v", got.Tmux, tt.want)
+			}
+		})
+	}
+}
+
 func TestResolveRequiresGetenv(t *testing.T) {
 	t.Parallel()
 

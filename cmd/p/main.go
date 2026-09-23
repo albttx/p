@@ -37,10 +37,11 @@ func run(args []string) error {
 	}
 
 	cmd := cli.New(cli.Params{
-		Version: version,
-		CodeDir: cfg.CodeDir,
-		Stdout:  os.Stdout,
-		Stderr:  os.Stderr,
+		Version:      version,
+		CodeDir:      cfg.CodeDir,
+		NavigateTmux: cfg.Tmux,
+		Stdout:       os.Stdout,
+		Stderr:       os.Stderr,
 	})
 	// Errors are reported by main, on stderr, with a single "p:" prefix.
 	// Leaving the library's handler in place would print them a second time

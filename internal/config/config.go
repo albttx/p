@@ -25,6 +25,10 @@ type Config struct {
 	CodeDir string
 	// Source names where CodeDir came from: "env", "file" or "default".
 	Source string
+	// Tmux makes `p <query>` open the project's tmux session instead of
+	// printing a cd. It comes from the "tmux" key of the config file and
+	// defaults to false.
+	Tmux bool
 }
 
 // Options are the inputs to [Resolve]. The zero value is not useful; use
@@ -42,6 +46,7 @@ type Options struct {
 // file is the on-disk schema of ~/.config/p/config.yaml.
 type file struct {
 	CodeDir string `yaml:"code_dir"`
+	Tmux    bool   `yaml:"tmux"`
 }
 
 // Load resolves the configuration from the process environment.
@@ -70,48 +75,55 @@ func Resolve(opts Options) (Config, error) {
 		return Config{}, errors.New("config: Getenv is required")
 	}
 
+	// The file is read even when $CODE_DIR short-circuits the code_dir lookup:
+	// tmux has no environment equivalent, so it only lives here.
+	f, err := readFile(opts.ConfigPath)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg := Config{Tmux: f.Tmux}
+
 	if raw := strings.TrimSpace(opts.Getenv(EnvCodeDir)); raw != "" {
 		dir, err := Expand(raw, opts.Home, opts.Getenv)
 		if err != nil {
 			return Config{}, fmt.Errorf("expand $%s: %w", EnvCodeDir, err)
 		}
-		return Config{CodeDir: dir, Source: "env"}, nil
+		cfg.CodeDir, cfg.Source = dir, "env"
+		return cfg, nil
 	}
 
-	raw, err := readFile(opts.ConfigPath)
-	if err != nil {
-		return Config{}, err
-	}
-	if raw != "" {
+	if raw := strings.TrimSpace(f.CodeDir); raw != "" {
 		dir, err := Expand(raw, opts.Home, opts.Getenv)
 		if err != nil {
 			return Config{}, fmt.Errorf("expand code_dir from %s: %w", opts.ConfigPath, err)
 		}
-		return Config{CodeDir: dir, Source: "file"}, nil
+		cfg.CodeDir, cfg.Source = dir, "file"
+		return cfg, nil
 	}
 
-	return Config{CodeDir: filepath.Join(opts.Home, DefaultDirName), Source: "default"}, nil
+	cfg.CodeDir, cfg.Source = filepath.Join(opts.Home, DefaultDirName), "default"
+	return cfg, nil
 }
 
-// readFile returns the code_dir value from path. A missing file yields an
-// empty string and no error.
-func readFile(path string) (string, error) {
+// readFile parses the config file at path. A missing file yields the zero
+// value and no error.
+func readFile(path string) (file, error) {
 	if path == "" {
-		return "", nil
+		return file{}, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return "", nil
+			return file{}, nil
 		}
-		return "", fmt.Errorf("read %s: %w", path, err)
+		return file{}, fmt.Errorf("read %s: %w", path, err)
 	}
 
 	var f file
 	if err := yaml.Unmarshal(data, &f); err != nil {
-		return "", fmt.Errorf("parse %s: %w", path, err)
+		return file{}, fmt.Errorf("parse %s: %w", path, err)
 	}
-	return strings.TrimSpace(f.CodeDir), nil
+	return f, nil
 }
 
 // Expand resolves a leading "~" and any $VAR references in path against home

@@ -21,6 +21,7 @@ const (
 	flagOwner   = "owner"
 	flagExclude = "exclude"
 	flagLimit   = "limit"
+	flagTmux    = "tmux"
 )
 
 // Params wire the command tree to its environment. Everything the commands
@@ -31,6 +32,11 @@ type Params struct {
 	// CodeDir is the already-resolved default source root, used as the
 	// default for --code-dir.
 	CodeDir string
+	// NavigateTmux makes `p <query>` open the project's tmux session instead
+	// of emitting a cd. It comes from the config file's tmux key and seeds the
+	// default of the root --tmux flag, so --tmux and --tmux=false override it
+	// per invocation.
+	NavigateTmux bool
 	// Stdout carries command output and the cd sentinel. Defaults to
 	// os.Stdout.
 	Stdout io.Writer
@@ -130,6 +136,11 @@ func New(p Params) *ucli.Command {
 				Usage:   "root of the source tree",
 				Value:   p.CodeDir,
 				Sources: ucli.EnvVars(config.EnvCodeDir),
+			},
+			&ucli.BoolFlag{
+				Name:  flagTmux,
+				Usage: "open the project in a tmux session instead of cd (switch if it exists, create if not)",
+				Value: p.NavigateTmux,
 			},
 		}, selectorFlags()...),
 		Commands: []*ucli.Command{

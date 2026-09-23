@@ -71,8 +71,11 @@ type harness struct {
 	// shim's pipe. It defaults to true, so tests assert the in-process attach
 	// unless they deliberately exercise the captured-stdout path.
 	stdoutTTY bool
-	stdout    bytes.Buffer
-	stderr    bytes.Buffer
+	// navigateTmux simulates `tmux: true` in the config file, the seed for
+	// the root --tmux flag's default.
+	navigateTmux bool
+	stdout       bytes.Buffer
+	stderr       bytes.Buffer
 }
 
 func newHarness(t *testing.T, repos ...string) *harness {
@@ -96,13 +99,14 @@ func (h *harness) run(args ...string) error {
 	h.stderr.Reset()
 
 	cmd := New(Params{
-		Version: "test",
-		CodeDir: h.root,
-		Stdout:  &h.stdout,
-		Stderr:  &h.stderr,
-		Git:     h.git,
-		Tmux:    h.tmux,
-		Getenv:  func(k string) string { return h.env[k] },
+		Version:      "test",
+		CodeDir:      h.root,
+		NavigateTmux: h.navigateTmux,
+		Stdout:       &h.stdout,
+		Stderr:       &h.stderr,
+		Git:          h.git,
+		Tmux:         h.tmux,
+		Getenv:       func(k string) string { return h.env[k] },
 
 		StdoutIsTerminal: func() bool { return h.stdoutTTY },
 	})
@@ -119,13 +123,14 @@ func (h *harness) runRaw(argv []string) error {
 	h.stderr.Reset()
 
 	cmd := New(Params{
-		Version: "test",
-		CodeDir: h.root,
-		Stdout:  &h.stdout,
-		Stderr:  &h.stderr,
-		Git:     h.git,
-		Tmux:    h.tmux,
-		Getenv:  func(k string) string { return h.env[k] },
+		Version:      "test",
+		CodeDir:      h.root,
+		NavigateTmux: h.navigateTmux,
+		Stdout:       &h.stdout,
+		Stderr:       &h.stderr,
+		Git:          h.git,
+		Tmux:         h.tmux,
+		Getenv:       func(k string) string { return h.env[k] },
 
 		StdoutIsTerminal: func() bool { return h.stdoutTTY },
 	})
